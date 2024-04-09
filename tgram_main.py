@@ -9,19 +9,14 @@ from telegram.ext import (
     CommandHandler,
     filters,
     MessageHandler,
-    InlineQueryHandler,
-    CallbackContext,
 )
 from telegram import (
     InputMediaPhoto,
     Update,
-    InlineQueryResultArticle,
-    InputTextMessageContent,
     constants,
 )
 import logging
 import random
-import gpt
 import os
 import time
 import allowlist
@@ -106,7 +101,7 @@ class HelpText:
         outstr = ""
         for key in self.commands_dict:
             if "long" in key and id.lower().strip() in key.split("/")[1]:
-                if len(id.lower().strip()) == len(key[key.find("/") + 1 :]):
+                if len(id.lower().strip()) == len(key[key.find("/") + 1:]):
                     outstr = f"{id.strip().lower()} -- {self.commands_dict[key]}\n"
                     return outstr
 
@@ -652,7 +647,7 @@ async def get_list_of_user_states(update: Update, context: ContextTypes.DEFAULT_
 async def list_all_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Listing all images for Admin")
     out_msg = list_images_raw()
-    msgs = [out_msg[i : i + 4094] for i in range(0, len(out_msg), 4096)]
+    msgs = [out_msg[i: i + 4094] for i in range(0, len(out_msg), 4096)]
     for text_out in msgs:
         await update.message.reply_text(text=text_out)
     return
@@ -663,7 +658,7 @@ async def list_my_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     logger.info(f"Listing all images for user {user.id} : {user.full_name}")
     out_msg = list_images_by_user(user.id)
-    msgs = [out_msg[i : i + 4094] for i in range(0, len(out_msg), 4096)]
+    msgs = [out_msg[i: i + 4094] for i in range(0, len(out_msg), 4096)]
     for text_out in msgs:
         await update.message.reply_text(text=text_out)
     return
@@ -713,7 +708,7 @@ async def get_all_my_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Function to split the list of files into chunks of 10
     def split_list_in_chunks(lst, n):
         for i in range(0, len(lst), n):
-            yield lst[i : i + n]
+            yield lst[i: i + n]
 
     # Splitting the list of files into chunks of 10
     chunks_of_files = list(split_list_in_chunks(list_of_files, 10))
@@ -813,7 +808,7 @@ async def get_all_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Function to split the list of files into chunks of 10
     def split_list_in_chunks(lst, n):
         for i in range(0, len(lst), n):
-            yield lst[i : i + n]
+            yield lst[i: i + n]
 
     # Splitting the list of files into chunks of 10
     chunks_of_files = list(split_list_in_chunks(list_of_files, 10))
@@ -882,7 +877,7 @@ async def cross_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 + "\n\n<b>(Revised message)</b>\n"
                 + gpt_response
             )
-            msgs = [refined[i : i + 4094] for i in range(0, len(refined), 4096)]
+            msgs = [refined[i: i + 4094] for i in range(0, len(refined), 4096)]
             for text_out in msgs:
                 # await update.message.reply_text(text=text_out)
                 await context.bot.send_message(
@@ -947,7 +942,7 @@ async def google_gemini_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 do_not_increase=True,
             )
             msgs = [
-                words_joined[i : i + 4094] for i in range(0, len(words_joined), 4096)
+                words_joined[i: i + 4094] for i in range(0, len(words_joined), 4096)
             ]
             for text_out in msgs:
                 await update.message.reply_text(text=text_out)
@@ -1015,7 +1010,7 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg_to_file = msg_to_file + f"'{words_joined}'"
                 f.write(msg_to_file + "\n")
             msgs = [
-                words_joined[i : i + 4094] for i in range(0, len(words_joined), 4096)
+                words_joined[i: i + 4094] for i in range(0, len(words_joined), 4096)
             ]
             for text_out in msgs:
                 await update.message.reply_text(text=text_out)
