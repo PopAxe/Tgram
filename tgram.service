@@ -1,0 +1,14 @@
+[Unit]
+Description=Start Tgram in Venv
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'source <PATH TO YOUR ENVIORNMENT>/bin/activate && python <PATH TO YOUR SCRIPT>/tgram_main.py'
+Restart=always
+StandardOutput=file:/var/log/tgram.log
+StandardError=file:/var/log/tgram.log
+WorkingDirectory=<PATH TO YOUR SCRIPT>/
+
+[Install]
+WantedBy=multi-user.target
+

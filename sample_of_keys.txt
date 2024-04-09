@@ -1,0 +1,33 @@
+#This is a Configuration file for the telegram bot.  You can leave the defaults or changed
+#them as you see fit.  Just remember that your API keys must be filled in.  Right now the 
+#bot doesn't check to see if you have a key or not and will crash if they aren't included.
+
+##########################################################################################
+#                                                                                        #
+# Copy this file to a new file called keys.txt in the same directory of your tgram       #
+#   chat bot and fill in required settings.  Leave the defaults if you want to.          #
+#                                                                                        #
+##########################################################################################
+
+
+[Required Settings]
+# Open AI Key for Chat GPT and Dall-E
+openaikey=
+# Telegram BOT key
+botkey=
+# Admin ID (the integer, not the username)
+admin=
+# Google Gemini API Key
+googlegemini=
+
+[Misc Settings]
+# Filename that all chat responses are saved to.
+chatfile=telegram_chat_responses.txt
+# file name of the qoutes saved. (included)
+quotefile=new_quotes_1.txt
+# Allow List Filename.  Even if you aren't using an allowlist, you should provide something here.
+allowlistfilename=allowed_users.txt
+# This below defaults to false.  Only use this if you want default true.
+#    Note that this can be toggled with an admin command if you want to test first.
+#    use /toggleallow to turn this off/on real time.
+#useallowlist=true
