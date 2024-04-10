@@ -39,6 +39,28 @@ class LLM_ACCESS:
         else:
             return "Sorry, but did you mean to say something?"
 
+    def dall_E_3(self, message: str, size="1024x1024", quality="standard"):
+        openai.api_key = self.config.CHAT_GPT_KEY
+        if message and size in ["1024x1024", "1792x1024", "1024x1792"]:
+            try:
+                response = openai.images.generate(
+                    model="dall-e-3",
+                    prompt=message,
+                    n=1,
+                    size=size,
+                    quality=quality,
+                )
+                return response.data[0].url
+            except Exception as e:
+                self.logger.error(f" Dall-E3 failed with {e}")
+        return "Sorry but there's nothing to go by here."
+    
+    def get_openai_models(self) -> list[str]:
+        openai.api_key = self.config.CHAT_GPT_KEY
+        res = openai.models.list()
+        model_names = [model.id for model in res.data]
+        return model_names
+        
     def google_gemini(self, message: str):
         genai.configure(api_key=self.config.GEMINI_KEY)
         generation_config = {
@@ -55,7 +77,7 @@ class LLM_ACCESS:
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
         ]
         model = genai.GenerativeModel(
-            model_name="gemini-1.0-pro",
+            model_name="gemini-1.5-pro-latest",
             generation_config=generation_config,
             safety_settings=safety_settings,
         )
@@ -64,18 +86,12 @@ class LLM_ACCESS:
         # TODO : This needs retry logic.
         return response.text
 
-    def dall_E_3(self, message: str, size="1024x1024", quality="standard"):
-        openai.api_key = self.config.CHAT_GPT_KEY
-        if message and size in ["1024x1024", "1792x1024", "1024x1792"]:
-            try:
-                response = openai.images.generate(
-                    model="dall-e-3",
-                    prompt=message,
-                    n=1,
-                    size=size,
-                    quality=quality,
-                )
-                return response.data[0].url
-            except Exception as e:
-                self.logger.error(f" Dall-E3 failed with {e}")
-        return "Sorry but there's nothing to go by here."
+    def get_gemini_models(self) -> list[str]:
+        # gets the models from Gemini API if you decide to use something new.
+        genai.configure(api_key=self.config.GEMINI_KEY)
+        models = genai.list_models()
+        outlist= []
+        for model in models:
+            outlist.append(str(model.name).split("/")[1])
+        return(outlist)
+            

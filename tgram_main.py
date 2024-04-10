@@ -547,6 +547,27 @@ async def get_system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
+@is_admin
+@check_user_state
+async def list_all_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Listing all models for Admin.")
+    try:
+        gemini_models = LLM.get_gemini_models()
+        openai_models = LLM.get_openai_models()
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        await send_to_admin(
+            f"LISTMODELS_COMMAND -- got error :{e}", context
+        )
+        return
+    out_str = f"<b>Gemini</b> has {len(gemini_models)} models which are : \n {', '.join(gemini_models)}"
+    out_str += f"\n\n<b>OpenAI</b> has {len(openai_models)} models which are : \n {', '.join(openai_models)}"
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=out_str,
+        parse_mode=constants.ParseMode.HTML,
+    )
+
 
 async def send_to_admin(message: str, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Sending message to admin.")
@@ -603,6 +624,7 @@ async def admin_help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         /sys -- brief of the above
         /log -- get last 6 log lines (use L:# to change lines and put a space after the number)
         /restart -- restarts  the telegram bot with a delay
+        /listmodels -- lists all models for all LLM's that are in use.
         
         <b>Working with saved items</b>
         /listallimages -- lists ALL the images we have saved on the disk.
@@ -1158,7 +1180,6 @@ async def frog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
-
 async def send_alive_msg(message: str):
     # Start stuff here, like making sure directories exist:
     save_dir = os.path.join(os.getcwd(), "images")
@@ -1338,6 +1359,7 @@ if __name__ == "__main__":
     get_list_of_user_states_handler = CommandHandler(
         "getuserlist", get_list_of_user_states
     )
+    list_all_models_handler = CommandHandler("listmodels", list_all_models)
 
     application.add_handler(cpu_usage_handler)
     application.add_handler(disk_usage_handler)
@@ -1372,11 +1394,20 @@ if __name__ == "__main__":
     application.add_handler(get_my_user_state_handler)
     application.add_handler(get_user_state_handler)
     application.add_handler(get_list_of_user_states_handler)
+    application.add_handler(list_all_models_handler)
     application.add_handler(unknown_handler)
 
     asyncio.get_event_loop().run_until_complete(
         send_alive_msg(" 🎇 TGram is starting! 😇 ")
     )
 
+    # Get gemini models
+    gemini_models = LLM.get_gemini_models() # get gemini models for printing to log 
+    logger.info(f"There are {len(gemini_models)} Gemini models and they are : {', '.join(gemini_models)}")
+
+    # Get OpenAI models
+    openai_models = LLM.get_openai_models()
+    logger.info(f"There are {len(openai_models)} OpenAI models and they are : {', '.join(openai_models)}")
+    
     logger.info(" 🎇 TGram is starting! 😇 ")
     application.run_polling()
