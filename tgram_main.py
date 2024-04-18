@@ -690,12 +690,10 @@ async def list_my_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_my_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     words_joined = str(" ".join(context.args)).strip().lower()
+    logger.info(f"User {user.id} : {user.name} requesting image : {words_joined}")
     msg_out = f"Filename is invalid {words_joined}"
     if words_joined.count("_") > 0:
         if words_joined.split("_")[0] == str(user.id):
-            logger.info(
-                f"Getting image for user {user.id} : {user.full_name} --> image {words_joined}"
-            )
             filename_request = os.path.join(os.getcwd(), "images", words_joined)
             if os.path.isfile(filename_request):
                 await context.bot.sendPhoto(
@@ -713,6 +711,7 @@ async def get_my_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
         reply_to_message_id=update.message.message_id,
     )
+    logger.info(f"User {user.id} : {user.name} failed to get image : {words_joined}")
 
 
 @check_user_state
@@ -724,7 +723,7 @@ async def get_all_my_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=f"Sending you {len(list_of_files)} images.",
+        text=f"Sending you {len(list_of_files)} images, in groups of 10.  I'll let you know when I'm done.",
     )
 
     # Function to split the list of files into chunks of 10
@@ -735,21 +734,26 @@ async def get_all_my_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Splitting the list of files into chunks of 10
     chunks_of_files = list(split_list_in_chunks(list_of_files, 10))
     # Iterating over each chunk and sending them as separate media groups
-    for chunk in chunks_of_files:
+    for index, chunk in enumerate(chunks_of_files):
         media_group = []
-        for file_path in chunk:
-            with open(file_path, "rb") as f:
-                media_group.append(InputMediaPhoto(f))
-                # Note: We're directly passing the file object to InputMediaPhoto
-        if media_group:
-            await context.bot.send_media_group(
-                chat_id=update.effective_chat.id, media=media_group
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text="No images found."
-            )
-            return
+        try:
+            for file_path in chunk:
+                with open(file_path, "rb") as f:
+                    media_group.append(InputMediaPhoto(f))
+                    # Note: We're directly passing the file object to InputMediaPhoto
+            if media_group:
+                await context.bot.send_media_group(
+                    chat_id=update.effective_chat.id, media=media_group
+                )
+                await asyncio.sleep(0.5)
+            else:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id, text="No images found."
+                )
+                return
+        except Exception as e:
+            logger.error(f"USER: {user.id} : {user.name} Error sending chunk {index+1}: {e}")
+            continue
     await context.bot.send_message(
         chat_id=update.effective_chat.id, text=f"Download complete! 💾 🎨"
     )
@@ -836,20 +840,26 @@ async def get_all_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chunks_of_files = list(split_list_in_chunks(list_of_files, 10))
     # Iterating over each chunk and sending them as separate media groups
 
-    for chunk in chunks_of_files:
+    for index, chunk in enumerate(chunks_of_files):
         media_group = []
-        for file_path in chunk:
-            with open(file_path, "rb") as f:
-                media_group.append(InputMediaPhoto(f))
-        if media_group:
-            await context.bot.send_media_group(
-                chat_id=update.effective_chat.id, media=media_group
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text="No images found."
-            )
-            return
+        try:
+            for file_path in chunk:
+                with open(file_path, "rb") as f:
+                    media_group.append(InputMediaPhoto(f))
+            if media_group:
+                logger.info(f"ADMIN IMAGE DOWNLOAD: Sending chunk {index + 1} with {len(media_group)} items.")
+                await context.bot.send_media_group(
+                    chat_id=update.effective_chat.id, media=media_group
+                )
+                await asyncio.sleep(10) # too many per minute?
+            else:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id, text="No images found."
+                )
+                return
+        except Exception as e:
+            logger.error(f"ADMIN IMAGE DOWNLOAD: Error sending chunk {index + 1}: {e}")
+            continue
     await context.bot.send_message(
         chat_id=update.effective_chat.id, text=" 💾 Image download complete. 💾"
     )
@@ -1108,7 +1118,7 @@ async def dall_e_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f.write(file_data.content)
             # update user prompt for pic
             users.update_pic(user.id, prompt=original_prompt, prompt_result=filename)
-            logger.info(f"Saved image from {user.id} as {filename}")
+            logger.info(f"Saved image from {user.id} : {user.name} as {filename}")
         except Exception as e:
             words_joined = (
                 "Looks like that's not an allowed prompt.  It's been rejected!"
@@ -1125,7 +1135,7 @@ async def dall_e_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         words_joined = "There was nothing to send to DALL-E.  Try typing \n/p <i>message here...</i>\nto send a message to DALL-E."
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=f"Your image ({size}) " + words_joined,
+        text=f"Your image ({size})\n #images_{user.id}\n <code>{filename}</code>\n " + words_joined,
         parse_mode=constants.ParseMode.HTML,
     )
 
@@ -1219,13 +1229,19 @@ async def get_image_by_file_name(update: Update, context: ContextTypes.DEFAULT_T
 
 
 def list_images_raw() -> str:
-    images_dir = os.path.join(os.getcwd(), "images")
-    file_list = os.scandir(images_dir)
-    out_str = ""
-    for entry in file_list:
-        if entry.is_file():
-            out_str += entry.name + "\n"
-    return out_str
+    try:
+        images_dir = os.path.join(os.getcwd(), "images")
+        file_list = os.scandir(images_dir)
+        out_str = ""
+        counter = 0
+        for entry in file_list:
+            if entry.is_file():
+                counter +=1 
+                out_str += entry.name + "\n"
+        return out_str + f"Total images: {counter}\n"
+    except Exception as e:
+        logger.error(f"Error listing images: {e}")
+        return "Error listing images."
 
 
 def list_images_raw_list() -> list:
@@ -1243,11 +1259,13 @@ def list_images_by_user(id: str | int) -> str:
     images_dir = os.path.join(os.getcwd(), "images")
     file_list = os.scandir(images_dir)
     out_str = ""
+    counter = 0
     for entry in file_list:
         if entry.is_file():
             if entry.name.startswith(str(id).strip()):
+                counter += 1
                 out_str += entry.name + "\n"
-    return out_str
+    return out_str + f"Total images: {counter}\n"
 
 
 def list_images_by_user_as_list(id: str | int) -> list:
