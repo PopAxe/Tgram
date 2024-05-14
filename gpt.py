@@ -11,10 +11,10 @@ class LLM_ACCESS:
         self.config = config
 
     def gpt_4(
-        self, message="", prev_sub="", system_is="You are a helpful assistant.", temp=1
+        self, message="", prev_sub="", system_is="You are a helpful assistant.", 
+        temp=1, openAI_model="gpt-4o"
     ):
         openai.api_key = self.config.CHAT_GPT_KEY
-        GPT_4_MODEL_NAME = "gpt-4-0125-preview"
         if message:
             try_counter = 0
             MAX_TRIES = 4
@@ -22,7 +22,7 @@ class LLM_ACCESS:
                 try:
                     response = openai.chat.completions.create(
                         # model="gpt-4",
-                        model=GPT_4_MODEL_NAME,
+                        model=openAI_model,
                         # temperature=temp,
                         messages=[
                             {"role": "system", "content": system_is},
