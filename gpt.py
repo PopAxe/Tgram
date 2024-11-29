@@ -25,7 +25,7 @@ class LLM_ACCESS:
                         model=openAI_model,
                         # temperature=temp,
                         messages=[
-                            {"role": "system", "content": system_is},
+                            #{"role": "system", "content": system_is}, # TEMP DISABLED FOR USING PREVIEW MODELS
                             {"role": "assistant", "content": prev_sub},
                             {"role": "user", "content": message},
                         ],
@@ -33,9 +33,10 @@ class LLM_ACCESS:
                     self.logger.info(f"   * GPT responded with try {try_counter}")
                     return response.choices[0].message.content
                 except Exception as e:
+                    self.logger.error(f" GPT failed with {e} on try {try_counter}, using model {openAI_model}")
                     try_counter += 1
             # if we get here, throw an error:
-            raise Exception("Failure while sending to ChatGPT")
+            raise Exception("Failure while sending to ChatGPT: ")
         else:
             return "Sorry, but did you mean to say something?"
 
@@ -61,7 +62,7 @@ class LLM_ACCESS:
         model_names = [model.id for model in res.data]
         return model_names
         
-    def google_gemini(self, message: str):
+    def google_gemini(self, message: str, model_to_use = "gemini-1.5-pro-latest"):
         genai.configure(api_key=self.config.GEMINI_KEY)
         generation_config = {
             "temperature": 0.9,
@@ -77,7 +78,7 @@ class LLM_ACCESS:
             {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
         ]
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-pro-latest",
+            model_name=model_to_use,
             generation_config=generation_config,
             safety_settings=safety_settings,
         )

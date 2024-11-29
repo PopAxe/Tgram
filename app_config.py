@@ -14,6 +14,8 @@ class BotConfiguration:
         self.USE_ALLOW_LIST = False
         self.CHAT_FILE = ""
         self.QUOTE_FILE = ""
+        self.CHAT_GPT_MODEL = ""
+        self.GEMINI_MODEL = ""
         self.logger = logger.getChild("config")
         self.load_config()
         self.verify_config()
@@ -45,6 +47,12 @@ class BotConfiguration:
                 self.CHAT_FILE = line[line.find("=") + 1 :].strip("\n").strip()
             if line.startswith("quotefile"):
                 self.QUOTE_FILE = line[line.find("=") + 1 :].strip("\n").strip()
+            if line.startswith("openaimodel"):
+                val = line[line.find("=") + 1 :].strip("\n").strip()
+                self.CHAT_GPT_MODEL = "default" if val == "default" else val #empty means use whats in the code
+            if line.startswith("googlecheminimodel"):
+                val = line[line.find("=") + 1 :].strip("\n").strip()
+                self.GEMINI_MODEL = "default" if val == "default" else val #empty means use whats in the code
 
     def verify_config(self):
         """

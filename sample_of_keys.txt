@@ -31,3 +31,7 @@ allowlistfilename=allowed_users.txt
 #    Note that this can be toggled with an admin command if you want to test first.
 #    use /toggleallow to turn this off/on real time.
 #useallowlist=true
+# Set the default model for OpenAI (Default means use what is in the code)
+openaimodel=default
+# Set the default model for Gemini (Default means use what is in the code)
+googlecheminimodel=default

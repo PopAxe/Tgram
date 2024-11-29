@@ -134,7 +134,7 @@ def is_admin(func):
             )
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=f"Command is not authoriszed for {user.id} : {user.full_name}",
+                text=f"Command is not authorized for {user.id} : {user.full_name}",
                 parse_mode=constants.ParseMode.HTML,
             )
 
@@ -547,6 +547,7 @@ async def get_system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
+
 @is_admin
 @check_user_state
 async def list_all_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -625,6 +626,8 @@ async def admin_help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         /log -- get last 6 log lines (use L:# to change lines and put a space after the number)
         /restart -- restarts  the telegram bot with a delay
         /listmodels -- lists all models for all LLM's that are in use.
+        /usemodel [chatgpt|gemini] [modelname] -- change the model being used."
+
         
         <b>Working with saved items</b>
         /listallimages -- lists ALL the images we have saved on the disk.
@@ -851,7 +854,7 @@ async def get_all_images(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_media_group(
                     chat_id=update.effective_chat.id, media=media_group
                 )
-                await asyncio.sleep(10) # too many per minute?
+                await asyncio.sleep(10)  # too many per minute?
             else:
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id, text="No images found."
@@ -888,7 +891,10 @@ async def cross_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             # DON'T keep the record.
             users.update_prompt(user.id, users.LLMTypes.BOTH)
-            words_from_gemini = LLM.google_gemini(words_joined)
+            if APP_CONFIG.GEMINI_MODEL == "default":
+                words_from_gemini = LLM.google_gemini(words_joined)
+            else:
+                words_from_gemini = LLM.google_gemini(words_joined, model_to_use=APP_CONFIG.GEMINI_MODEL)
             # limit on how big a msg can be so break it up.
             logger.info(" ++ Gemini sent in /cross")
             with open(APP_CONFIG.CHAT_FILE, "a") as f:
@@ -896,7 +902,10 @@ async def cross_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f.write(msg_to_file + "\n")
             # logger.info(f" REPLY from Google Gemini (cross check)= {words_from_gemini}")
             new_words = f"Previous, I asked ```{words_joined}``` and got the answer ```{words_from_gemini}```.  Can you improve upon it? please respond with either this answer I already have or a new answer improving upon this answer.  Please don't give a description of the old answer and improvements."
-            gpt_response = LLM.gpt_4(new_words)
+            if APP_CONFIG.CHAT_GPT_MODEL == "default":
+                gpt_response = LLM.gpt_4(new_words)
+            else:
+                gpt_response = LLM.gpt_4(new_words, openAI_model=APP_CONFIG.CHAT_GPT_MODEL)
             logger.info(" ++ ChatGPT sent in /cross")
             # logger.info(f" REPLY from GPT (cross check) = {gpt_response}")
             with open(APP_CONFIG.CHAT_FILE, "a") as f:
@@ -961,7 +970,10 @@ async def google_gemini_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
             users.update_prompt(
                 user.id, UserStates.LLMTypes.GEMINI, prompt=words_joined
             )
-            words_joined = LLM.google_gemini(words_joined_final)
+            if APP_CONFIG.GEMINI_MODEL == "default":
+                words_joined = LLM.google_gemini(words_joined_final)
+            else:
+                words_joined = LLM.google_gemini(words_joined_final, model_to_use=APP_CONFIG.GEMINI_MODEL)
             # limit on how big a msg can be so break it up.
             with open(APP_CONFIG.CHAT_FILE, "a") as f:
                 msg_to_file = msg_to_file + f"'{words_joined}'"
@@ -1028,9 +1040,14 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 words_joined_final = words_joined
             # add lastest prompt.
             users.update_prompt(user.id, UserStates.LLMTypes.GPT, prompt=words_joined)
-            words_joined = LLM.gpt_4(
-                message=words_joined_final, temp=temp
-            )  # Using GPT-4
+            if APP_CONFIG.CHAT_GPT_MODEL == "default":
+                words_joined = LLM.gpt_4(
+                    message=words_joined_final, temp=temp
+                )  # Using GPT-4
+            else:
+                words_joined = LLM.gpt_4(
+                    message=words_joined_final, temp=temp, openAI_model=APP_CONFIG.CHAT_GPT_MODEL
+                )
             # limit on how big a msg can be so break it up.
             users.update_prompt(
                 user.id,
@@ -1190,6 +1207,7 @@ async def frog(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
+
 async def send_alive_msg(message: str):
     # Start stuff here, like making sure directories exist:
     save_dir = os.path.join(os.getcwd(), "images")
@@ -1236,7 +1254,7 @@ def list_images_raw() -> str:
         counter = 0
         for entry in file_list:
             if entry.is_file():
-                counter +=1 
+                counter += 1
                 out_str += entry.name + "\n"
         return out_str + f"Total images: {counter}\n"
     except Exception as e:
@@ -1420,12 +1438,12 @@ if __name__ == "__main__":
     )
 
     # Get gemini models
-    gemini_models = LLM.get_gemini_models() # get gemini models for printing to log 
+    gemini_models = LLM.get_gemini_models()  # get gemini models for printing to log
     logger.info(f"There are {len(gemini_models)} Gemini models and they are : {', '.join(gemini_models)}")
 
     # Get OpenAI models
     openai_models = LLM.get_openai_models()
     logger.info(f"There are {len(openai_models)} OpenAI models and they are : {', '.join(openai_models)}")
-    
+
     logger.info(" 🎇 TGram is starting! 😇 ")
     application.run_polling()
