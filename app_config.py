@@ -1,4 +1,5 @@
 import logging
+from typing import Union
 
 
 # The `BotConfiguration` class is designed to load and verify configuration settings from a
@@ -32,7 +33,7 @@ class BotConfiguration:
                 self.BOT_KEY = line[line.find("=") + 1 :].strip("\n").strip()
             if line.startswith("admin"):
                 self.ADMIN = line[line.find("=") + 1 :].strip("\n").strip()
-            if line.startswith("googlegemini"):
+            if line.startswith("googlegemini="):
                 self.GEMINI_KEY = line[line.find("=") + 1 :].strip("\n").strip()
             if line.startswith("allowlistfilename"):
                 self.ALLOW_LIST_FILENAME = (
@@ -50,7 +51,7 @@ class BotConfiguration:
             if line.startswith("openaimodel"):
                 val = line[line.find("=") + 1 :].strip("\n").strip()
                 self.CHAT_GPT_MODEL = "default" if val == "default" else val #empty means use whats in the code
-            if line.startswith("googlecheminimodel"):
+            if line.startswith("googlegeminimodel"):
                 val = line[line.find("=") + 1 :].strip("\n").strip()
                 self.GEMINI_MODEL = "default" if val == "default" else val #empty means use whats in the code
 
@@ -63,3 +64,48 @@ class BotConfiguration:
             if vals == "":
                 self.logger.error(f"Missing {props} in config file {self.filename}")
                 raise Exception(f"Missing {props} in config file {self.filename}")
+
+    def save_model_change(self, bot: Union["openai", "gemini"], model: str="") -> bool:
+        """
+        The function `save_model_change` updates a specified model in a configuration file based on the bot
+        type provided.
+        
+        :param bot: The `bot` parameter in the `save_model_change` function is expected to be of type Union,
+        which means it can be either "openai" or "gemini"
+        :type bot: Union["openai", "gemini"]
+        :param model: The `model` parameter in the `save_model_change` function represents the name of the
+        model that you want to update in the configuration file. It is a string parameter that should be
+        provided when calling the function. If the `model` parameter is not provided (empty string), the
+        function will log
+        :type model: str
+        :return: The function `save_model_change` returns a boolean value - `True` if the model change was
+        successfully saved in the configuration file, and `False` if there was an issue such as a missing
+        model name or if the configuration for the specified bot could not be found.
+        """
+        if not model:
+            self.logger.error(f"Missing model name to update.")
+            return False
+        
+        with open(self.filename, "r") as f:
+            lines_from_config = f.readlines()
+
+        prefix = "openaimodel" if bot == "openai" else "googlegeminimodel"
+        changed = False
+        for line in lines_from_config:
+            if line.startswith(prefix):
+                self.logger.info(f"Updating {bot} model to {model}")
+                changed_line = line.split("=")[0].strip()+"="+model+"\n"
+                lines_from_config[lines_from_config.index(line)] = changed_line
+                changed = True
+                break
+        
+        if not changed:
+            self.logger.info(f"Couldn't update {bot} to model {model} because the configuration couldn't be found.")
+            return False
+        
+        self.logger.info(f"Saving config file {self.filename}")
+        with open(self.filename, "w") as f:
+            f.writelines(lines_from_config)
+        return True
+
+        

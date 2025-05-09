@@ -1,6 +1,7 @@
 import asyncio
 from enum import Enum
 import json
+import re
 import subprocess
 import requests
 from telegram.ext import (
@@ -628,6 +629,8 @@ async def admin_help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         /restart -- restarts  the telegram bot with a delay
         /listmodels -- lists all models for all LLM's that are in use.
         /model [chatgpt|gemini] [modelname] -- change the model being used.  Empty command will return the models in use."
+        /savemodels -- saves the models in use so they are persistent through reload/reboot.
+        /searchmodels <txt> -- search models for text i.e. /searchmodels o3
 
         
         <b>Working with saved items</b>
@@ -1377,13 +1380,73 @@ async def change_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"User {update.message.from_user.full_name}|{update.message.from_user.id} changing gemini model.")
         APP_CONFIG.GEMINI_MODEL = context.args[-1]
         msg_out += f"Gemini model changed to <code>{APP_CONFIG.GEMINI_MODEL}</code>\n"
-    msg_out += "\n<i>Changes listed above.  Be aware this is not a permanent change.  You will need to access the bot configuration to make this change permanent.</i>"
+    msg_out += "\n<i>Changes listed above.  You can use /savemodels to make this permanent.</i>"
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=msg_out,
         parse_mode=constants.ParseMode.HTML,
     )
     return 
+
+@is_admin
+async def save_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    The function `save_models` saves changes to OpenAI and Gemini models and provides a summary message.
+    """
+    msg_out = "Changes:\n"
+    openai_done = APP_CONFIG.save_model_change("openai",APP_CONFIG.CHAT_GPT_MODEL)
+    gemini_done = APP_CONFIG.save_model_change("gemini",APP_CONFIG.GEMINI_MODEL)
+    saved = "✅ saved "
+    not_saved =  "🚫 not saved"
+    msg_out = f"OpenAI Model : <code>{APP_CONFIG.CHAT_GPT_MODEL}</code>\nGemini Model : <code>{APP_CONFIG.GEMINI_MODEL}</code>\n\n ----------------\n"
+    msg_out += f"<code>OPEN_AI</code> = {saved if openai_done else not_saved}\n"
+    msg_out += f"<code>GEMINI</code> = {saved if gemini_done else not_saved}\n"
+    msg_out += "Remember that these changes are now persistent through reloads."
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=msg_out,
+        parse_mode=constants.ParseMode.HTML,
+    )
+    return 
+
+@is_admin
+async def search_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    words_joined = " ".join(context.args)
+    if not len(context.args):
+        msg_out = "Search the models for specific text to aid you in changing the model to another model.  Example:\n"
+        msg_out += "<code>/searchmodels o3</code> \n -- This would yield all models that contain the text for o3.\n"
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=msg_out,
+            parse_mode=constants.ParseMode.HTML,
+        )
+        return
+    msg_out = "Search results:\n"
+    gpt_models = LLM.get_openai_models()
+    gemini_models = LLM.get_gemini_models()
+    pre = r""
+    post = r""
+    regex = re.compile(fr"{pre}{re.escape(words_joined)}{post}",
+                     flags=re.IGNORECASE)   
+    msg_out += "\nGPT:\n"
+    for model in gpt_models:
+        if regex.search(model):
+            msg_out += f"{model}\n"
+    msg_out += "----------------\n\n"
+    msg_out += "\nGemini:\n"
+    for model in gemini_models:
+        if regex.search(model):
+            msg_out += f"{model}\n"
+    msg_out += "----------------\n\n"
+    msg_out += f"Total models for GPT: {len(gpt_models)}\n"
+    msg_out += f"Total modesl for Gemini: {len(gemini_models)}\n"
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=msg_out,
+        parse_mode=constants.ParseMode.HTML,
+    )
+    return
+
 
 if __name__ == "__main__":
 
@@ -1427,6 +1490,8 @@ if __name__ == "__main__":
     )
     list_all_models_handler = CommandHandler("listmodels", list_all_models)
     change_model_handler = CommandHandler("model", change_model)
+    save_models_handler = CommandHandler("savemodels", save_models)
+    search_models_handler = CommandHandler("searchmodels", search_models)
 
     application.add_handler(cpu_usage_handler)
     application.add_handler(disk_usage_handler)
@@ -1463,6 +1528,8 @@ if __name__ == "__main__":
     application.add_handler(get_list_of_user_states_handler)
     application.add_handler(list_all_models_handler)
     application.add_handler(change_model_handler)
+    application.add_handler(save_models_handler)
+    application.add_handler(search_models_handler)
     application.add_handler(unknown_handler)
 
     asyncio.get_event_loop().run_until_complete(
