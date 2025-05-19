@@ -61,6 +61,7 @@ users = UserStates(logger)
 
 
 class HelpText:
+    # TODO: Move this to q file instead?
     def __init__(self) -> None:
         self.commands_dict = {
             "/start": "This list plus a welcome message",
@@ -619,6 +620,8 @@ async def get_log_lines(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @check_user_state
 async def admin_help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Sending help commands to admin.")
+    # TODO : Lets move this into a file.  We can crete a new universal help 
+    # reader function to read and display this.
     msg = """
         <b>System Commands</b>
         /mem -- Free memory detail
@@ -630,7 +633,7 @@ async def admin_help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         /listmodels -- lists all models for all LLM's that are in use.
         /model [chatgpt|gemini] [modelname] -- change the model being used.  Empty command will return the models in use."
         /savemodels -- saves the models in use so they are persistent through reload/reboot.
-        /searchmodels <txt> -- search models for text i.e. /searchmodels o3
+        /searchmodels [txt] -- search models for text i.e. /searchmodels o3
 
         
         <b>Working with saved items</b>
@@ -1394,7 +1397,9 @@ async def save_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     The function `save_models` saves changes to OpenAI and Gemini models and provides a summary message.
     """
     msg_out = "Changes:\n"
+    logger.info("Saving models changed to OPENAI")
     openai_done = APP_CONFIG.save_model_change("openai",APP_CONFIG.CHAT_GPT_MODEL)
+    logger.info("Saving models changed to GEMINI")
     gemini_done = APP_CONFIG.save_model_change("gemini",APP_CONFIG.GEMINI_MODEL)
     saved = "✅ saved "
     not_saved =  "🚫 not saved"
@@ -1413,6 +1418,7 @@ async def save_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def search_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     words_joined = " ".join(context.args)
     if not len(context.args):
+        logger.info("Searching models failed beause no seardh string was supplied.")
         msg_out = "Search the models for specific text to aid you in changing the model to another model.  Example:\n"
         msg_out += "<code>/searchmodels o3</code> \n -- This would yield all models that contain the text for o3.\n"
         await context.bot.send_message(
@@ -1426,6 +1432,7 @@ async def search_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gemini_models = LLM.get_gemini_models()
     pre = r""
     post = r""
+    logger.info(f"searching modles for string: '{words_joined}'")
     regex = re.compile(fr"{pre}{re.escape(words_joined)}{post}",
                      flags=re.IGNORECASE)   
     msg_out += "\nGPT:\n"
