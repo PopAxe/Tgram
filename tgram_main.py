@@ -1,5 +1,6 @@
 import asyncio
 from enum import Enum
+from functools import wraps
 import json
 import re
 import subprocess
@@ -22,9 +23,11 @@ import os
 import time
 import allowlist
 import string
+import chat_properties
 from app_config import BotConfiguration
 from user_state import UserStates
 from gpt import LLM_ACCESS
+
 
 
 # Name of your systemctl telegram service
@@ -59,6 +62,9 @@ allow_list = allowlist.AllowList(APP_CONFIG.ALLOW_LIST_FILENAME)
 # User states
 users = UserStates(logger)
 
+# Chat properties (to allow reading of text freely)
+CHAT_PROPS = chat_properties.ChatProperties(logger)
+
 
 class HelpText:
     # TODO: Move this to q file instead?
@@ -90,6 +96,10 @@ class HelpText:
             "long/getmyimage": "Get the image by filename as listed in the /listmyimages command.  example <code>/getmyimage myimage123456.png</code>",
             "/getallmyimages": "Get all of the images I have saved",
             "long/getallmyimages": "Get all the images I have and send them to me all at once.  They will be in groups of ten at a time.",
+            "/listen": "Start listening to chat with [model].",
+            "long/listen": f"/listen <code>{CHAT_PROPS.VALID_MODELS}</code> (pick one) will allow you to set the chat to be listened to by that model.  Normal slash commands will still work.  Restricted to those who are allow-listed. Example: \n <code>/listen gemini</code>",
+            "/stop": "Stops the bot from listening to all messages from the chat.",
+            "long/stop": "Stops the bot from listening to all messages from the chat.  Only allow-listed members can issue this command.",
         }
 
     def short_help_all_to_string(self):
@@ -172,6 +182,30 @@ def create_random_filename(size: int) -> str:
         return "".join(random.choices(string.digits + string.ascii_lowercase, k=size))
     else:
         return ""
+
+def user_allowed(id) -> bool:
+    if APP_CONFIG.USE_ALLOW_LIST:
+        if id in allow_list.id_list:
+            return True
+        else:
+            return False
+    else:
+        return True  # if we aren't using the list, always true.
+
+
+def is_user_allowed(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        uid = str(update.effective_user.id)
+        if not user_allowed(uid):
+            await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="🚫 You aren't allowed to use this feature.  Contact the Admin using /feedback [your text] if you'd like to be added.",
+            parse_mode=constants.ParseMode.HTML,
+        )
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
 
 
 def format_data_into_size(number: str) -> list:
@@ -887,7 +921,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text="Sorry, I didn't understand that command.",
     )
 
-
+@is_user_allowed
 @check_user_state
 async def cross_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -956,7 +990,7 @@ async def cross_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
-
+@is_user_allowed
 @check_user_state
 async def google_gemini_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -1020,7 +1054,7 @@ async def google_gemini_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         parse_mode=constants.ParseMode.HTML,
     )
 
-
+@is_user_allowed
 @check_user_state
 async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -1095,22 +1129,10 @@ async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=constants.ParseMode.HTML,
     )
 
-
+@is_user_allowed
 @check_user_state
 async def dall_e_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
-    # VERIFY ALLOW
-    allowed = user_allowed(str(user.id))
-    if not allowed:
-        logger.info(
-            f"user {user.id}, `{user.full_name}` tried to use /p but isn't allowed."
-        )
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"Sorry, but you aren't allowed to use this feature.",
-            parse_mode=constants.ParseMode.HTML,
-        )
-        return
     # join all the words because the bot sees it as a list of words.
     words_joined = " ".join(context.args)
     if not words_joined == "":
@@ -1304,17 +1326,6 @@ def list_images_by_user_as_list(id: str | int) -> list:
                 out_list.append(path_and_file)
     return out_list
 
-
-def user_allowed(id) -> bool:
-    if APP_CONFIG.USE_ALLOW_LIST:
-        if id in allow_list.id_list:
-            return True
-        else:
-            return False
-    else:
-        return True  # if we aren't using the list, always true.
-
-
 async def give_examples_html(update: Update, context: ContextTypes.DEFAULT_TYPE):
     example_text = """
     <b>bold</b>, <strong>bold</strong>
@@ -1454,6 +1465,60 @@ async def search_models(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return
 
+@is_user_allowed
+async def listen_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    words_joined = " ".join(context.args)
+    words_joined = words_joined.strip().lower()
+    if words_joined in CHAT_PROPS.VALID_MODELS:
+        logger.info(f"User {user.full_name}|{user.id} started listening to chat ID '{str(update.effective_chat.id)}' or '{update.effective_chat.effective_name}'.")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Listening to chat ID '{str(update.effective_chat.id)}' or '{update.effective_chat.effective_name}' with model '{words_joined}'",
+            parse_mode=constants.ParseMode.HTML,
+        )
+        CHAT_PROPS.set_chat(str(update.effective_chat.id),words_joined,True, chat_title=update.effective_chat.effective_name)
+    else:
+        valid_words = ""
+        for word in CHAT_PROPS.VALID_MODELS:
+            valid_words += f" <code>{word}</code> ,"
+        valid_words = valid_words[:-1]
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"Invalid model '{words_joined}'\n\n Use as followed: \n /listen [{valid_words}]\n Choose one of the options in the brackets.",
+            parse_mode=constants.ParseMode.HTML,
+        )
+    
+
+@is_user_allowed
+async def listen_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    logger.info(f"User {user.full_name}|{user.id} stopped listening to chat ID '{str(update.effective_chat.id)}' or '{update.effective_chat.effective_name}'.")
+    CHAT_PROPS.set_chat(str(update.effective_chat.id), "", False, chat_title=update.effective_chat.effective_name)
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=f"OK, {user.name}, I will stop listening to '{str(update.effective_chat.id)}' or '{update.effective_chat.effective_name}'",
+        parse_mode=constants.ParseMode.HTML,
+    )
+
+async def listening_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    props = CHAT_PROPS.get_chat(str(chat_id))
+    if not props["listening"]:
+        return
+    model = props["model"]
+    text = update.message.text.strip()
+    if not text or text.startswith("/"):
+        return   # ignore empty or other commands
+    # send to existing handlers
+    logging.info(f"{update.message.from_user.name} sending message -> processing via listening mode")
+    if model == "chatgpt":
+        context.args = [text]
+        await chat_command(update, context)
+    else:
+        context.args = [text]
+        await google_gemini_chat(update, context)
 
 if __name__ == "__main__":
 
@@ -1499,6 +1564,8 @@ if __name__ == "__main__":
     change_model_handler = CommandHandler("model", change_model)
     save_models_handler = CommandHandler("savemodels", save_models)
     search_models_handler = CommandHandler("searchmodels", search_models)
+    listen_start_handler = CommandHandler("listen", listen_start)
+    listen_stop_handler = CommandHandler("stop", listen_stop)
 
     application.add_handler(cpu_usage_handler)
     application.add_handler(disk_usage_handler)
@@ -1537,7 +1604,12 @@ if __name__ == "__main__":
     application.add_handler(change_model_handler)
     application.add_handler(save_models_handler)
     application.add_handler(search_models_handler)
+    application.add_handler(listen_start_handler)
+    application.add_handler(listen_stop_handler)
     application.add_handler(unknown_handler)
+    application.add_handler(
+        MessageHandler(filters.TEXT & (~filters.COMMAND), listening_bot)
+    )
 
     asyncio.get_event_loop().run_until_complete(
         send_alive_msg(" 🎇 TGram is starting! 😇 ")
