@@ -1,6 +1,7 @@
 import asyncio
 from enum import Enum
 from functools import wraps
+import io
 import json
 import re
 import subprocess
@@ -1140,28 +1141,46 @@ async def dall_e_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_to_file = f"(Dall-E) {user.username} '{words_joined}' : "
         try:
             if "size:h" in words_joined:
-                size = "1792x1024"
+                size = "1536x1024"
                 words_joined = words_joined.replace("size:h", "")
             elif "size:v" in words_joined:
-                size = "1024x1792"
+                size = "1024x1536"
                 words_joined = words_joined.replace("size:v", "")
             else:
                 size = "1024x1024"
-            quality = "standard"
-            if "q:hd" in words_joined:
-                quality = "hd"
-                words_joined = words_joined.replace("q:hd", "")
+            if "quality:h" in words_joined:
+                quality = "high"
+            elif "quality:l" in words_joined:
+                quality = "low"
+            else:
+                quality = "medium"
             original_prompt = words_joined
-            words_joined = LLM.dall_E_3(words_joined, size=size, quality=quality)
+            image_data = LLM.dall_E_3(words_joined, size=size, quality=quality)
+            chat = update.effective_chat
+            if isinstance(image_data, str):
+                await context.bot.send_message(
+                    chat_id=chat.id,
+                    text="The image generation has failed",
+                )
+                logger.warn(f"Failed to generate an image for user {user.id} with prompt: '{words_joined}'.")
+                return
             # Now, save the file incoming.
             save_dir = os.path.join(os.getcwd(), "images")
             filename = (
                 str(user.id) + "_" + create_random_filename(20) + ".png"
             )  # GPT returns PNG
             file_save_with_dir = os.path.join(save_dir, filename)
-            file_data = requests.get(words_joined)
+            file_data = image_data
             with open(file_save_with_dir, "wb") as f:
-                f.write(file_data.content)
+                f.write(file_data)
+            # send the pic to the user.
+            image_file = io.BytesIO(image_data)
+            image_file.name = filename
+            await context.bot.send_photo(
+                chat_id=chat.id,
+                photo=image_file,
+                caption=f"Your image ({size})\n#images_{user.id}\n{filename}",
+            )
             # update user prompt for pic
             users.update_pic(user.id, prompt=original_prompt, prompt_result=filename)
             logger.info(f"Saved image from {user.id} : {user.name} as {filename}")
@@ -1179,11 +1198,11 @@ async def dall_e_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f.write(msg_to_file + "\n")
     else:
         words_joined = "There was nothing to send to DALL-E.  Try typing \n/p <i>message here...</i>\nto send a message to DALL-E."
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=f"Your image ({size})\n #images_{user.id}\n <code>{filename}</code>\n " + words_joined,
-        parse_mode=constants.ParseMode.HTML,
-    )
+    # await context.bot.send_message(
+    #     chat_id=update.effective_chat.id,
+    #     text=f"Your image ({size})\n #images_{user.id}\n <code>{filename}</code>\n " + words_joined,
+    #     parse_mode=constants.ParseMode.HTML,
+    # )
 
 
 @check_user_state
@@ -1505,14 +1524,16 @@ async def listen_stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def listening_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     props = CHAT_PROPS.get_chat(str(chat_id))
+    print("Checking on ", props)
     if not props["listening"]:
+        print("Not listening")
         return
     model = props["model"]
     text = update.message.text.strip()
     if not text or text.startswith("/"):
         return   # ignore empty or other commands
     # send to existing handlers
-    logging.info(f"{update.message.from_user.name} sending message -> processing via listening mode")
+    logger.info(f"{update.message.from_user.name} sending message -> processing via listening mode")
     if model == "chatgpt":
         context.args = [text]
         await chat_command(update, context)

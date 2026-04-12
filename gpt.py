@@ -1,4 +1,7 @@
+import base64
+
 import openai
+from openai import OpenAI
 import google.generativeai as genai
 import logging
 
@@ -9,18 +12,18 @@ class LLM_ACCESS:
     def __init__(self, config: BotConfiguration, logger: logging.Logger) -> None:
         self.logger = logger
         self.config = config
+        self.openai_client = OpenAI(api_key=self.config.CHAT_GPT_KEY)
 
     def gpt_4(
         self, message="", prev_sub="", system_is="You are a helpful assistant.", 
         temp=1, openAI_model="gpt-4o"
     ):
-        openai.api_key = self.config.CHAT_GPT_KEY
         if message:
             try_counter = 0
             MAX_TRIES = 4
             while try_counter < MAX_TRIES:
                 try:
-                    response = openai.chat.completions.create(
+                    response = self.openai_client.chat.completions.create(
                         # model="gpt-4",
                         model=openAI_model,
                         # temperature=temp,
@@ -40,25 +43,23 @@ class LLM_ACCESS:
         else:
             return "Sorry, but did you mean to say something?"
 
-    def dall_E_3(self, message: str, size="1024x1024", quality="standard"):
-        openai.api_key = self.config.CHAT_GPT_KEY
-        if message and size in ["1024x1024", "1792x1024", "1024x1792"]:
+    def dall_E_3(self, message: str, size="1024x1024", quality="medium"):
+        if message and size in ["1024x1024", "1024x1536", "1536x1024"] and quality in ["high", "medium", "low"]:
             try:
-                response = openai.images.generate(
-                    model="dall-e-3",
+                img = self.openai_client.images.generate(
+                    model="gpt-image-1.5",
                     prompt=message,
                     n=1,
                     size=size,
                     quality=quality,
                 )
-                return response.data[0].url
+                return base64.b64decode(img.data[0].b64_json)
             except Exception as e:
-                self.logger.error(f" Dall-E3 failed with {e}")
+                self.logger.error(f"Image Generation failed with {e}")
         return "Sorry but there's nothing to go by here."
     
     def get_openai_models(self) -> list[str]:
-        openai.api_key = self.config.CHAT_GPT_KEY
-        res = openai.models.list()
+        res = self.openai_client.models.list()
         model_names = [model.id for model in res.data]
         return model_names
         
